@@ -161,7 +161,7 @@
 
 * onRestart 停止变成运行状态之前
 
-* <img src="activity_lifetime.png" width="50%" height="50%">
+* ![](imgs/activity_lifetime.png)
 
 * 活动回收后数据保存问题：
 

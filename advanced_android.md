@@ -33,7 +33,7 @@
         * 如果启动了那么fork一个子Zygote进程
         * <font color=red>学习execve</font> 
 
-<img src="init_zygote.png" width="50%">
+![](imgs/init_zygote.png)
 
 #### 属性服务
 
@@ -73,8 +73,7 @@
 * 启动引导服务
 * 启动核心服务
 * 启动其他服务
-
-<img src="system_server.png"/>
+* ![](imgs/system_server.png)
 
 #### PackageManagerService
 
