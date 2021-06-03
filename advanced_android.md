@@ -50,4 +50,45 @@
 #### Zygote
 
 * Zygote创造DVM,ART,application process, and System Server
+* 通过 args 的 --zygote, --start-system-server来区分当前进程是在zygote，还是在system-server中，因为zygote进程是通过fork自己创建子进程的，需要flag来区分
+* runtime.start() C++方法来调用Java方法
+  * 启动Java虚拟机
+  * 为Java虚拟机注册JNI方法
+  * `env->NewStringUTF(className)` C++ String to Java String
+  * `toSlashClassName(className)` //将className . 替换成 /
+  * `env->FindClass(slashClassName)`
+  * `jmethodID startMeth = env->GetStaticMethodID(startClass, "main", "([Ljava/lang/String;])V")` 获取main方法
+  * `env->CallStaticVoidMethod(startClass, startMeth, strArray);` 通过JNI调用main方法
+* ZygoteInit.java
+  * 创建一个Server端的Socket
+  * 预加载类和资源
+  * 启动SystemServer
+  * 等待AMS请求
+
+#### SystemServer
+
+* SystemServer创建AMS, WMS, 和 PMS
+* 启动Binder线程池与其他线程通信
+* 加载动态库libandroid_servers.so
+* 启动引导服务
+* 启动核心服务
+* 启动其他服务
+
+<img src="system_server.png"/>
+
+#### PackageManagerService
+
+* 由mSystemServiceManager创建
+* 注册到ServiceManager
+  * 管理各种Service
+  * C/S架构中Binder通信机制
+
+#### Launcher
+
+* 是Android系统的桌面
+  * 用于启动应用程序
+  * 管理应用图标和显示
+* 请求PackageManagerService返回系统中已安装的application信息
+
+### 
 
