@@ -18,6 +18,7 @@
 * Bootloader导引程序拉起OS
 * Linux 内核启动寻找init.rc，执行init进程
 * Init进程初始化，fork Zygote子进程
+* ![](imgs\launch_flow.png)
 
 #### Android Init Language
 
@@ -88,6 +89,156 @@
   * 用于启动应用程序
   * 管理应用图标和显示
 * 请求PackageManagerService返回系统中已安装的application信息
+* 调用了AMS的startHomeActivityLocked方法
+* 三种工厂模式
+  * 非工厂模式
+  * 低级工厂模式
+  * 高级工厂模式
+* 有HomeIntent来启动桌面活动
+* 如何显示各应用图标
+  * 每个工作区用来描述一个抽象桌面
+    * 由n个屏幕组成，每个屏幕分成n个单元格，每个单元格用来显示一个应用程序的快捷图标
 
-### 
+#### 应用程序进程启动过程
+
+* 应用程序需要先有对应的进程
+* AMS作为Client端，发送请求到Zygote的Server端Socket，来创建应用程序进程
+* 连接Zygote分为主模式(zygote)和辅模式(zygote_secondary)
+* ABI (Application Binary Interface)
+  * 应用程序二进制接口ABI（Application Binary Interface）定义了二进制文件（尤其是.so文件）如何运行在相应的系统平台上，从使用的指令集，内存对齐到可用的系统函数库。
+* ActivityThread
+* Binder线程池
+  * `ZygoteInit.nativeZygoteInit()`
+  * `ProcessState->startThreadPool()`
+  * `spawnPooledThread()`
+  * IPCThreadState的joinThreadPool将当前线程注册到Binder驱动程序中,新创建的线程就加入了Binder线程池中，新创建的应用就支持Binder进程间通信
+
+#### 消息循环创建
+
+* ActivityThread类用于管理当前应用进程的主线程
+* `Looper.prepareMainLooper()`
+* `sMainThreadHandler = thread.getHandler()`
+* `Looper.loop()`
+
+#### 四大组件的工作过程
+
+#### 根Activity的启动过程
+
+* Root Activity是第一个被启动的活动
+
+* 调用startActivity
+
+* 调用Instrumentation的execStartActivity
+
+  * Instrumentation用来监控应用程序和系统的交互
+
+* ActivityManager.getService()
+
+* 调用IActivityManagerSingleton的get方法
+
+  * ```java
+    private static final Singleton<IActivityManager> IActivityManagerSingleton = new Singleton<IActivityManager>(){
+        @Override
+        protected IActivityManager create(){
+            final IBinder  b = ServiceManager.getService(Context.ACTIVITY_SERVICE);
+            final IActivityManager am = IActivityManager.Stub.asInterface(b);
+            return am;
+        }
+    }
+    ```
+
+  * 以上是AIDL生成的
+
+  * IActivityManager.Stub类实现进程间通信
+
+* AMS到ApplicationThread
+
+  * ![](imgs\ams.png)
+
+* ![](imgs\activity_launch.png)
+
+#### Service的启动过程
+
+* ContextImpl到ActivityManageService
+  * Activity.attach将Activity和上下文appContext关联起来
+* ActivityThread启动Service
+  * ServiceLookupResult
+  * ServiceRecord (可以从PackageManagerService获取)
+  * 找到ServiceRecord对应的ProcessRecord
+    * 如果进程不存在
+      * 调用AMS的startProcessLocked方法创建对应的应用进程
+  * ApplicationThread是ActivityThread的内部类
+  * Service被封装成ActivityClientRecord
+  * sendMessage方法向H类发送为CREATE_SERVICE的消息
+  * mH指向H类，是ActivityThread的内部类并继承自Handler，是应用进程中主线程的消息管理类
+  * 获取要启动Service的应用程序的LoadedAPK
+  * Service.attach来初始化
+  * 调用service的onCreate方法
+
+#### Service的绑定过程
+
+* ContextImpl到AMS的绑定过程
+  * IServiceConnection实现Binder机制，这样Service绑定就支持跨进程
+    * 具体实现为ServiceDispatcher.InnerConnection，其中ServiceDispatcher是LoadedApk的内部类
+  * bindService
+* Service的绑定过程
+
+#### 广播的注册、发送和接受过程
+
+* 广播的注册
+  * 静态注册 (由PackageManagerService来注册完成)
+  * 动态注册 (registerReceiver方法)
+    * ContextWrapper中实现
+    * ContextImpl中registerReceiverInternal
+    * 获取IIntentReceiver对象
+    * 注册广播是一个跨进程过程
+    * 粘性广播 (sendStickyBroadcast)
+      * Intent会一直保留到广播事件结束，而这种广播也没有所谓的10秒限制，10秒限制是指普通的广播如果onReceive方法执行时间太长，超过10秒的时候系统会将这个广播置为可以干掉的candidate，一旦系统资源不够的时候，就会干掉这个广播而让它不执行
+* 广播的发送
+  * ContextImpl到AMS
+    * 调用AMS的broadcastIntent方法
+      1. 验证广播是否合法
+      2. 将动态注册的广播接收者和静态注册的广播接受者按照优先级高低不同存储在不同的列表中
+      3. 调用broadcastQueue
+  * AMS到BroadReceiver
+    * BroadcastHandler对象发送BROADCAST_INTENT_MSG类型消息
+    * 在BroadcastHandler的handleMessage方法中处理
+    * 进入processNextBroadcast方法
+    * 遍历无序广播发送给Receivers
+    * 判断广播接受者所在进程是否存在，即ApplicationThread
+    * 通过IIntentReceiver实现跨进程通信(AIDL)，具体实现为LoadedApk.ReceiverDispatcher.InnerReceiver继承自IIntentReceiver.Stub是Binder通信的服务端，而IIntentReceiver则是Binder通信的客户端
+    * LoadedApk.ReceiverDispatcher执行具体逻辑
+    * mActivityThread.post(args.getRunnable())
+    * 将Args对象的getRunnable方法通过H类发送到线程的消息队列中
+
+#### ContentProvider的启动过程
+
+* query到AMS
+  * getContentResolver()
+  * ContextImpl.getContentResolver()返回ApplicationContentResolver
+  * acquireUnstableProvider(Uri uri)
+  * mMainThread.acquireProvider()即ActivityThread获取Provider
+  * 有一个mProviderMap用来缓存ContentProvider，不需要每次都调用AMS的getContentProvider方法
+  * 获取ContentProvider的应用进程信息（ProcessRecord）
+  * 判断进程是否已经启动，如果没有就创建
+  * 如果没有启动
+    * ActivityThread的main里的Looper.loop()会开始消息循环
+    * 调用AMS的attachApplication方法
+* AMS启动ContentProvider
+  * AMS的attachApplication
+  * thread的bindApplication向H发送BIND_APPLICATION类型信息
+  * ActivityThread的handleBindApplication
+  * 创建ContextImpl，反射创建Instrucmentation，创建application，调用onCreate方法，在启动之前启动ContentProvider
+  * AMS的publishConentProvider方法将ContentProvider存储在AMS的mProviderMap中
+  * 反射创建localProvider,调用ContentProvider的onCreate抽象方法
+
+#### 上下文对象Context
+
+![](imgs\context.png)
+
+* ContextWrapper使用了装饰模式
+* ContextThemeWrapper中包含不同的主题，那么Activity就继承他。反之，Service不需要主题
+* 组合而非继承的方式
+
+#### Application Context的创建过程
 
