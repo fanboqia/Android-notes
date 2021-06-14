@@ -1520,4 +1520,267 @@
           </service>
       </application>
       ```
+  
+
+* 文件下载实践
+  * 详情见第一行代码书籍
+
+### Android位置服务
+
+* 位置定位两种方式
+  * GPS定位
+    * 手机内置GPS硬件直接和卫星交互获取经纬度
+    * 精度高
+    * 只能户外使用
+  * 网络定位
+    * 根据手机附近的3个基站进行测速，进行三角定位
+    * 精度一般
+    * 室内外都可使用
+
+### Material Design
+
+* Toolbar
+
+  * 继承了ActionBar
+
+  * ```xml
+    <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+                 <!--命名空间切换从android到app-->
+                 xmlns:app="http://schemas.android.com/apk/res-auto"
+                 android:layout_width="match_parent"
+                 android:layout_height="match_parent">
+    			
+        		<android.support.v7.widget.Toolbar
+                         android.id="@+id/toolbar"
+                         android:layout_width="match_parent"
+                         android:layout_height="?attr/actionBarSize"
+                         android:background="?attr/colorPrimary"
+                         android:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar"
+                         <!--为了兼容Android5.0之前的系统-->
+                         app:popupTheme="@style/ThemeOverlay.AppCompat.Light"/>
+    </FrameLayout>
+    ```
+
+  * ```java
+    @Override
+    protected void onCreate(Bundle savedInstance){
+        super.onCreate(savedInstance);
+        setContentView(R.layout.activity_main);
+        Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
+        setSupportActionBar(toolbar);
+    }
+    ```
+
+* 滑动菜单
+
+  * DrawerLayout
+
+  * ```xml
+    <android.support.v4.widget.DrawerLayout
+     xmlns:android="http://schemas.android.com/apk/res/android"                        xmlns:app="http://schemas.android.com/apk/res-auto"
+     android:id="@+id/drawer_layout"
+     android:layout_width="match_parent"
+     android:layout_height="match_parent">
+        
+        <FrameLayout
+                    android:layout_width="match_parent"
+                     android:layout_height="match_parent">
+        			<android.support.v7.widget.Toolbar
+                         android.id="@+id/toolbar"
+                         android:layout_width="match_parent"
+                         android:layout_height="?attr/actionBarSize"
+                         android:background="?attr/colorPrimary"
+                         android:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar"
+                         app:popupTheme="@style/ThemeOverlay.AppCompat.Light"/>
+        </FrameLayout>
+        
+        <TextView 
+                  android:layout_width="match_parent"
+                  android:layout_height="match_parent"
+                  android:layout_gravity="start"
+                  android:text="This is menu"
+                  android:textSize="30sp"
+                  android:background="#FFF"/>
+        
+    </android.support.v4.widget.DrawerLayout>
+    ```
+
+  * ```java
+    mDrawerLayout = (DrawerLayout) findViewById(R.id.drawer_layout);
+    mDrawerLayout.openDrawer(GravityCompat.START);
+    ```
+
+* 导航栏NavigationView
+
+* 悬浮按钮FloatingActionButton
+
+* Snackbar (不同于Toast，增加了一个undo操作)
+
+* CoordinatorLayout
+  * FrameLayout的增强版
+  * 可以监听其他的子控件的各种事件
+* 卡片式布局 CardView
+  * 将FrameLayout的边角变成圆角和阴影，显得更加立体
+* 下拉刷新SwipeRefreshLayout
+* 可折叠式标题 CollapsingToolbarLayout
+
+### 进阶
+
+* 全局获取Context
+
+  * 问题：
+
+    * 在HTTPUtil类中，如果我们想实现发送失败的Toast提示，那么我们需要一个Context
+
+  * 解决办法：
+
+    * 自定义一个Application
+
+      * ```java
+        public class MyApplication extends Application{
+            
+            private static Context context;
+            
+            @Override
+            public void onCreate(){
+                context = getApplicationContext();
+            }
+            
+            //自己定义获取Context的方法
+            public static Context getContext(){
+                return context;
+            }
+        }
+        ```
+
+      * ```xml
+        <!--修改AndroidManifest.xml-->
+        <!--指定为自己定义的Application-->
+        <application
+                     android:name="com.example.networktest.MyApplication"
+        ```
+
+* 使用Intent传对象
+
+  * Serializable
+
+    * ```java
+      public class Person implements Serializable
+      ```
+
+    * ```java
+      //发送
+      Person person = new Person();
+      person.setName("Tom");
+      intent.putExtra("person_data", person);
+      startActivity(intent);
+      ```
+
+    * ```java
+      //接收
+      Person person = (Person) getIntent().getSerializableExtra("person_data");
+      ```
+
+  * Parcelable
+
+    * ```java
+      public class Person implements Parcelable{
+          
+          private String name;
+          
+          private int age;
+          
+          @Override
+          public int describeContents(){
+              return 0;
+          }
+          
+          //写入
+          @Override
+          public void writeToParcel(Parcel dest, int flags){
+              dest.writeString(name); //写出name
+              dest.writeInt(age);	//写出age
+          }
+          
+          //读取
+          public static final Parcelable.Creator<Person> CREATOR = new Parcelable.Creator<Person>(){
+              
+              @Override
+              public Person createFromParcel(Parcel source){
+                  Person person = new Person();
+                  person.name = source.readString();
+                  person.age = source.readInt();
+                  return person;
+              }
+              
+              @Override
+              public Person[] newArray(int size){
+                  return new Person[size];
+              }
+          }
+      }
+      ```
+
+    * ```java
+      Person person = (Person) getIntent().getParcelableExtra("person_data");
+      ```
+
+* 定制自己的日志信息
+
+  * 实现项目上线后，使用日志的代码部分自动关闭
+
+  * ```java
+    public class LogUtil{
+        
+        public static final int VERBOSE = 1;
+        
+        public static final int DEBUG = 2;
+        
+        public static final int INFO = 3;
+        
+        public static final int WARN = 4;
+        
+        public static final int ERROR = 5;
+        
+        public static final int NOTHING = 6;
+        
+        public static int level = VERBOSE;
+        
+        public static void v(String tag, String msg){
+            if(level <= VERBOSE){
+                Log.v(tag, msg);
+            }
+        }
+        
+        public static void d(String tag, String msg){
+            if(level <= DEBUG){
+                Log.d(tag, msg);
+            }
+        }
+        
+        public static void i(String tag, String msg){
+            if(level <= INFO){
+                Log.i(tag, msg);
+            }
+        }
+        
+        public static void w(String tag, String msg){
+            if(level <= WARN){
+                Log.w(tag, msg);
+            }
+        }
+        
+        public static void e(String tag, String msg){
+            if(level <= ERROR){
+                Log.e(tag, msg);
+            }
+        }
+    }
+    ```
+
+  * 上线后，只需要将level设置成NOTHING，所有的日志就是自动关闭
+
+  * 这里运用了封装的思想
+
+* 调试Android程序
 

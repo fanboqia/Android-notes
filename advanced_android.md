@@ -242,3 +242,105 @@
 
 #### Application Context的创建过程
 
+* ActivityThread类的内部类ApplicationThread的scheduleLaunchActivity方法启动Activity
+* ApplicationThread的scheduleLaunchActivity方法向H类发送消息，目的是启动Activity在主线程中
+* H类的handleMessage通过getPackageInfoNoCheck获得LoadedApk对象
+* ActivityThread的performLaunchActivity
+* LoadedApk.makeApplication
+* ContextImpl的createAppContext方法创建ContextImpl
+* mActivityThread.mInstrumentation.newApplication传入contextImpl
+* ContextImpl.setOuterContext(app)
+* app.attach(context)
+* 将ContextImpl赋值给ContextWrapper的mBase
+
+#### Application Context的获取过程
+
+* ContextWrapper的getApplicationContext()
+* 如果LoadedApk的mPackageInfo不为null，则调用LoadedApk的getApplication方法
+* 返回mApplication
+
+#### Activity的Context创建过程
+
+* ActivityThread的createBaseContextForActivity(ActivityClientRecord)返回ContextImpl
+* 传入ContextImpl到activity通过attach方法
+* ContextImpl.createActivityContext返回ContextImpl
+* attach方法中调用attachBaseContext(ContextThemeWrapper)
+* 调用父类(ContextWrapper)的attachBaseContext
+
+#### Service的Context创建过程
+
+* ActivityThread启动Service
+  * ActivityThread的内部类ApplicationThread的scheduleCreateService
+  * 其中sendMessage方法向H类发送CREATE_SERVICE消息
+  * H类handleMessage调用ActivityThread的handleCreateService
+  * ContextImpl.createAppContext返回ContextImpl
+  * service.attach(context)
+  * attachBaseContext(context)
+
+#### 理解AMS
+
+* Android7.0 AMS
+  * ActivityManager通过ActivityManagerNative的getDefault方法获取ActivityManagerProxy，通过AMP和AMS通信
+  * Instrumentation的execStartActivity调用ActivityManagerNative的getDefault获取AMP
+    * getDefault是一个singleton类
+    * 获取IBinder类型的AMS引用
+    * 将其封装成AMP类型对象 (asInterface(IBinder)) -> new ActivityManagerProxy(IBinder)
+  * 通过IBinder类型对象mRemote向服务端AMS发送一个START_ACTIVITY_TRANSACTION类型的进程间通信请求，服务端会从Binder线程池中读取客户端发来的数据，最终会调用AMN的onTransact方法
+  * onTransact调用AMS的startActivity方法
+* AMP是Client端，AMN是Server端
+* AMS是AMN的子类，AMP是AMS的Client端代理，AMN又实现了Binder类，这样AMP和AMS就可以实现Binder间通信了
+
+* ![](imgs\android7_ams.png)
+
+* ![](imgs\amp_ams.png)
+
+#### Android8.0的AMS
+
+* 和7.0的区别在于采用了AIDL (IActivityManager是AIDL工具在编译时自动生成)
+* 服务端只需要让AMS继承IActivityManager.Stub并实现方法
+* ![](imgs\android8_pms.png)
+
+#### AMS的启动过程
+
+* SystemServer中startBootstrapServices方法启动引导服务
+* mSystemServiceManager.startServer(ActivityManagerService.Lifecycle.class)
+* service.onStart就是启动了AMS
+
+#### AMS与应用进程
+
+* AMS检查应用程序所在进程是否存在，如果不存在就请求Zygote进程创建所需的应用进程
+
+#### AMS重要的数据结构
+
+* ActivityRecord
+  * ![](imgs\activity_record.png)
+
+* TaskRecord
+  * ![](imgs\task_record.png)
+
+* ActivityStack
+
+  * ActivityStackSupervisor管理ActivityStack
+
+  * ActivityState
+
+    * ```java
+      enum ActivityState{
+          INITIALIZATING,
+          RESUMED,
+          PAUSING,
+          PAUSED,
+          STOPPING,
+          STOPPED,
+          FINISHING,
+          DESTROYING,
+          DESTROYED
+      }
+      ```
+
+    * 当ActivityState为RESUMED或者PAUSING时才会调用WMS的方法来切换动画
+
+#### Activity任务栈管理
+
+![](imgs\activity_inst.png)
+
