@@ -1784,3 +1784,106 @@
 
 * 调试Android程序
 
+  * 可以先run程序，再选择Attach debugger to Android process就可以调试一个正在运行的程序
+
+* 创建定时任务
+
+  * Java API Timer类
+
+    * 手机会进入CPU休眠状态，Timer会受到影响
+
+  * Android Alarm机制
+
+    * ```java
+      public class LongRunningService extends Service{
+          
+      	@Override
+          public IBinder onBind(Intent intent){
+              return null;
+          }
+          
+          @Override
+          public int onStartCommand(Intent intent, int flags, int startId){
+              new Thread(new Runnable(){
+                 @Override
+                  public void run(){
+                      //在这里执行具体逻辑
+                  }
+              });
+              
+              AlarmManager manager = (AlarmManager) getSystemService(ALARM_SERVICE);
+              int anHour = 60 * 60 * 1000;
+              long triggerAtTime = SystemClock.elapsedRealTime() + anHour;
+      		Intent i = new Intent(this, LongRunningService.class);
+              PendingIntent pi = PendingIntent.getService(this, 0, i, 0);
+              manager.set(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAtTime, pi);
+              return super.onStartCommand(intent, flags, startId);
+          }
+      }
+      ```
+
+    * ```java
+      Intent intent = new Intent(context, LongRunningService.class);
+      context.startService(intent);
+      ```
+
+  * Doze模式
+
+    * 极大幅度地延长电池的使用寿命
+    * ![](imgs\doze.png)
+    * 随着设备进入Doze模式的时间越长，间歇性的退出Doze模式的时间间隔也会越长
+
+* 多窗口模式编程
+
+  * 一个屏幕显示多个应用
+
+  * ```xml
+    <activity android:configChanges="orientation|keyboardHidden|screenSize|screenLayout"></activity>
+    ```
+
+  * 以上是针对多窗口模式活动会被重新创建而进行的修改（避免了重复创建活动）
+
+  * 禁用多窗口模式
+
+    * ```xml
+      <application
+                   android:resizeableActivity="false">
+      </application>
+      ```
+
+    * 如果SDK低于24并设置为仅支持竖屏，那么系统自动判定为不支持多窗口模式
+
+      * ```xml
+        <activity
+                  android:screenOrientation="portait">
+            <!--仅支持竖屏-->
+        </activity>
+        ```
+
+* Lambda
+
+  * 当一个接口只有一个方法时可以简化
+
+    * ```java
+      new Thread(new Runnable(){
+          
+      }).start();
+      
+      new Thread(()->{
+          
+      }).start();
+      ```
+
+    * ```java
+      button.setOnClickListener(new View.OnClickListener(){
+         @Override
+          public void onClick(View v){
+              
+          }
+      });
+      
+      button.setOnClickListener(v ->{
+          
+      });
+      ```
+

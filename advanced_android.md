@@ -344,3 +344,155 @@
 
 ![](imgs\activity_inst.png)
 
+* LaunchFlags类似launch mode，只不过在源码中
+* taskAffinity设置在AndroidManifest.xml，用来指定Activity希望归属的栈
+
+#### 理解WindowManager
+
+* Window, WindowManager, 和 WMS
+
+* Window是一个抽象类（具体实现为PhoneWindow）, WindowManage是一个接口继承自ViewManager，WindowManager的实现类为WindowManagerImpl
+
+* ![](imgs\wms.png)
+
+  * WindowManager除了拥有ViewManager增删改的方法，还添加了
+
+    * ```java
+      public Display getDefaultDisplay(); //将Window添加到哪个屏幕上
+      public void removeViewImmediate(); //完成传入View的相关销毁工作
+      ```
+
+  * PhoneWindow在Activity的attach中创建
+
+  * WindowMangerImpl在addView方法中使用了[桥接模式](https://www.runoob.com/w3cnote/bridge-pattern2.html)，将功能[委托](https://www.runoob.com/w3cnote/delegate-mode.html)给了WindowManagerGlobal
+
+  * ![](imgs\wm.png)
+
+* Window的类型
+
+  * Application Window （应用程序窗口）
+    * Type从1-99
+  * Sub Window  (子窗口)
+    * Type从1000-1999
+  * System Window (系统窗口)
+    * Type从2000-2999
+  * 窗口显示次序
+    * 从屏幕里到屏幕外作为z轴
+    * Type越大越靠近用户（排前面）
+
+* Window的标志
+
+  * ![](imgs\window_flag.png)
+
+  * ```java
+    Window mWindow = getWindow();
+    mWindow.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+    ```
+
+  * ```java
+    Window mWindow = getWindow();
+    mWindow.setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
+    ```
+
+* 系统窗口的添加过程
+  * StatusBar是系统的状态栏（显示时间，电量，信号）
+  * 构造StatusBar视图并且添加到StatusBarManagerWindowManager
+  * mWindowManager.addView(mStatusBarView) 添加到WMS中，调用的其实是ViewManager的addView方法
+  * mGlobal.addView
+  * ViewRootImpl
+    * View树的根并管理View树
+    * 触发View树的测量
+    * 管理Surface
+    * 负责与WMS进行进程间通信
+  * IWindowSession是一个Binder类型，是Client的代理; Server端实现为Session
+  * ![](imgs\viewRootImpl.png)
+  * WMS为添加的窗口分配Surface，并确定窗口的显示次序，Surface就是画布，而SurfaceFlinger是一个混合器
+* Window的更新过程
+  * ViewManager的updateViewLayout，在WindowManagerImpl中实现
+  * 调用WindowManagerGlobal的updateViewLayout方法
+  * ViewRootImpl的scheduleTraversals
+  * performTraversals()
+    * relayout (重新构造结构)
+    * measure (重新测量)
+    * draw (重新绘制)
+
+#### 理解WindowManagerService
+
+* 职责
+  * 窗口管理
+  * 窗口动画 (WindowAnimator)
+  * 输入系统的中转站（触摸事件）（InputManagerService）
+  * Surface管理 （绘制）
+  * ![](imgs\wms_job.png)
+
+* WMS的创建过程
+  * SystemServer的main方法
+  * WMS属于其他服务的一种（引导服务i.e.AMS，核心服务i.e.BatteryService,，其他服务i.e.WMS）
+  * startOtherService中
+    * watchdog用来监视系统的一些关机服务
+    * WMS是在SystemServer的线程中的
+    * 调用WMS的main方法
+  * DisplayThread.getHandler().runWithScissors()是一个单例的前台线程，这个线程用来处理需要低延时显示的相关操作
+    * 判断了当前线程是否是Handler所指向的线程
+      * 如果是
+        * 执行Runnable的run方法
+      * 如果不是
+        * 执行BlockingRunnable的postAndWait方法
+        * 让system_server线程等待android.display线程
+  * 创建了一个WindowManagerService的单例
+  * 构造方法中
+    * 持有IMS的引用
+    * AMS的引用
+    * 创建WindowAnimator
+    * WindowManagerPolicy定义一个窗口策略所要遵守的通用规范
+    * 将WMS加入到Watchdog中（Watchdog每分钟都会对被监控的系统服务进行检查，如果服务出现死锁，则会杀死Watchdog所在进程）
+  * ![](imgs\thread1.png)
+
+* WMS的重要成员
+  * mPolicy: WindowManagerPolicy
+    * 允许定制窗口层级和特殊窗口类型以及关键调度和布局
+  * mSession: ArraySet
+    * 进程间通信
+    * 其他应用进程通信和WMS必须经过Session，每个进程对应一个session
+  * mWindowMap: WindowHashMap
+    * 继承自HashMap
+    * 限制了HashMap的key为IBinder类型
+  * mFinishedStarting: ArrayList
+    * WindowToken的子类
+      * 窗口令牌（应用程序申请窗口的通行证）
+  * mResizingWindows: ArrayList
+    * WindowState
+    * 用来存储正在调整大小的窗口
+  * mAnimator: WindowAnimator
+    * 管理窗口动画和特效动画
+  * mH: H
+    * 系统的Handler类，用于将任务加入到主线程的消息队列中
+  * mInputManager: InputManagerService
+    * 输入系统的管理者
+
+* Window的添加过程
+  * WMS的addWindow方法
+    * WMP的checkAddPermission方法来检查权限
+    * 通过displayId来获得窗口要添加到哪个DisplayContent上（DisplayContent用来描述一块屏幕）
+    * type代表一个窗口类型位于1000-1999（是子窗口）
+    * windowForClientLocked方法会根据attrs.token作为key从mWindowMap中获得该子窗口的父窗口
+  * 创建WindowState
+  * IWindow会将WMS中窗口管理的操作回调给ViewRootImpl
+  * 判断添加窗口的客户端是否已经死亡
+
+* Window的删除过程
+  * WindowManagerImpl的removeView
+  * ViewRootImpl的die方法
+  * immediate为立即执行
+  * WindowManagerGlobal的doRemoveView
+    * 从ViewRootImpl列表，布局参数列表和View列表中删除View元素
+  * ViewRootImpl的doDie中dispatchDetachedFromWindow
+  * mWindowSession.remove(mWindow);
+  * WMS的removeWindow
+  * removeIfPossible（不会直接执行删除操作，进行多个条件过滤）
+  * removeImmediately()
+  * 清除session对应的surfaceSession
+  * WMS的postWindowRemoveCleanupLocked进行对View的清理
+
+#### JNI原理
+
